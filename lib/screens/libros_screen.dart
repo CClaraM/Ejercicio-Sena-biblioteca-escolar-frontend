@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../services/api_service.dart';
 import 'agregar_libro_screen.dart';
 import 'editar_libro_screen.dart';
@@ -11,13 +12,16 @@ class LibrosScreen extends StatefulWidget {
 }
 
 class _LibrosScreenState extends State<LibrosScreen> {
-  // Colores tipo Figma (azul + dorado)
-  static const Color azul = Color(0xFF0B2A4A);
-  static const Color dorado = Color(0xFFC8A33A);
-
   bool loading = true;
   List<Map<String, dynamic>> libros = [];
-  String query = "";
+  String query = '';
+
+  // Paleta marca
+  static const Color navy = Color(0xFF0F2A44);
+  static const Color navy2 = Color(0xFF163A5F);
+  static const Color gold = Color(0xFFC8A24A);
+  static const Color bg = Color(0xFFF4F6FA);
+  static const Color cardBorder = Color(0xFFE6EAF2);
 
   @override
   void initState() {
@@ -38,7 +42,7 @@ class _LibrosScreenState extends State<LibrosScreen> {
       if (!mounted) return;
       setState(() => loading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("❌ Error cargando libros: $e")),
+        SnackBar(content: Text('Error cargando libros: $e')),
       );
     }
   }
@@ -48,134 +52,252 @@ class _LibrosScreenState extends State<LibrosScreen> {
     final q = query.trim().toLowerCase();
 
     final filtered = libros.where((b) {
-      final t = (b["titulo"] ?? "").toString().toLowerCase();
-      final a = (b["autor"] ?? "").toString().toLowerCase();
+      final t = (b['titulo'] ?? '').toString().toLowerCase();
+      final a = (b['autor'] ?? '').toString().toLowerCase();
       return t.contains(q) || a.contains(q);
     }).toList();
 
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: azul,
-        foregroundColor: Colors.white,
-        title: const Text("LIBROS"),
-        actions: [
-          IconButton(
-            tooltip: "Recargar",
-            onPressed: _load,
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
+      backgroundColor: bg,
+
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: gold,
+        foregroundColor: navy,
+        onPressed: () async {
+          await Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const AgregarLibroScreen()),
-          ).then((_) => _load());
+          );
+          _load();
         },
-        child: const Icon(Icons.add),
+        icon: const Icon(Icons.add),
+        label: const Text(
+          'Nuevo libro',
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
       ),
+
       body: loading
           ? const Center(child: CircularProgressIndicator())
-          : Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
+          : RefreshIndicator(
+              onRefresh: _load,
+              child: ListView(
                 children: [
-                  TextField(
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.search),
-                      hintText: "Buscar por título o autor",
-                      border: OutlineInputBorder(),
+                  // HEADER
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(20, 44, 20, 22),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [navy, navy2],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
                     ),
-                    onChanged: (v) => setState(() => query = v),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Libros',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'Catálogo y administración',
+                              style: TextStyle(color: Colors.white70),
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          tooltip: 'Actualizar',
+                          onPressed: _load,
+                          icon: const Icon(Icons.refresh, color: Colors.white),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 12),
 
-                  Expanded(
-                    child: RefreshIndicator(
-                      onRefresh: _load,
-                      child: filtered.isEmpty
-                          ? ListView(
-                              physics: const AlwaysScrollableScrollPhysics(),
-                              children: const [
-                                SizedBox(height: 120),
-                                Center(child: Text("No hay libros para mostrar")),
-                              ],
-                            )
-                          : ListView.separated(
-                              physics: const AlwaysScrollableScrollPhysics(),
-                              itemCount: filtered.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 8),
-                              itemBuilder: (_, i) {
-                                final b = filtered[i];
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        // Buscador en card
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: cardBorder),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 4,
+                          ),
+                          child: TextField(
+                            decoration: const InputDecoration(
+                              prefixIcon: Icon(Icons.search),
+                              hintText: 'Buscar por título o autor',
+                              border: InputBorder.none,
+                            ),
+                            onChanged: (v) => setState(() => query = v),
+                          ),
+                        ),
 
-                                // id puede venir int o String, lo normalizamos
-                                final dynamic rawId = b["id"];
-                                final int? id = rawId is int ? rawId : int.tryParse((rawId ?? "").toString());
+                        const SizedBox(height: 12),
 
-                                // ✅ PROBAMOS VARIAS CLAVES POSIBLES
-                                final portada = (b["portadaUrl"] ??
-                                        b["portada_url"] ??
-                                        b["portada"] ??
-                                        b["cover"] ??
-                                        b["coverUrl"] ??
-                                        b["cover_url"] ??
-                                        b["imageUrl"] ??
-                                        b["imagenUrl"] ??
-                                        "")
-                                    .toString();
-
-                                final titulo = (b["titulo"] ?? "Sin título").toString();
-                                final autor = (b["autor"] ?? "Sin autor").toString();
-                                final genero = (b["genero"] ?? "General").toString();
-                                final anio = (b["anio"] ?? "").toString().trim();
-                                final anioText = anio.isEmpty ? "—" : anio;
-
-                                return Card(
-                                  elevation: 2,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(12),
-                                    onTap: () {
-                                      _mostrarDetalleLibro(
-                                        libro: b,
-                                        id: id,
-                                        titulo: titulo,
-                                        autor: autor,
-                                        genero: genero,
-                                        anio: anioText,
-                                        portadaUrl: portada,
-                                      );
-                                    },
-                                    child: ListTile(
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                      leading: _cover(portada),
-                                      title: Text(
-                                        titulo,
-                                        style: const TextStyle(fontWeight: FontWeight.w800),
-                                      ),
-                                      subtitle: Text(
-                                        "Autor: $autor\nGénero: $genero • Año: $anioText",
-                                      ),
-                                      isThreeLine: true,
-                                      trailing: IconButton(
-                                        tooltip: "Editar",
-                                        icon: const Icon(Icons.edit),
-                                        onPressed: () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(builder: (_) => EditarLibroScreen(libro: b)),
-                                          ).then((_) => _load());
-                                        },
-                                      ),
+                        // Lista
+                        if (filtered.isEmpty)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(18),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: cardBorder),
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(Icons.info_outline, color: navy),
+                                SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    'No hay libros para mostrar.',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
-                                );
-                              },
+                                ),
+                              ],
                             ),
+                          )
+                        else
+                          ListView.separated(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: filtered.length,
+                            separatorBuilder: (context, index) =>
+                                const SizedBox(height: 10),
+                            itemBuilder: (context, i) {
+                              final b = filtered[i];
+
+                              final dynamic rawId = b['id'];
+                              final int? id = rawId is int
+                                  ? rawId
+                                  : int.tryParse((rawId ?? '').toString());
+
+                              final portada = (b['portadaUrl'] ??
+                                      b['portada_url'] ??
+                                      b['portada'] ??
+                                      b['cover'] ??
+                                      b['coverUrl'] ??
+                                      b['cover_url'] ??
+                                      b['imageUrl'] ??
+                                      b['imagenUrl'] ??
+                                      '')
+                                  .toString();
+
+                              final titulo =
+                                  (b['titulo'] ?? 'Sin título').toString();
+                              final autor =
+                                  (b['autor'] ?? 'Sin autor').toString();
+                              final genero =
+                                  (b['genero'] ?? 'General').toString();
+                              final anio =
+                                  (b['anio'] ?? '').toString().trim();
+                              final anioText = anio.isEmpty ? '-' : anio;
+
+                              return Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: cardBorder),
+                                ),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(16),
+                                  onTap: () {
+                                    _mostrarDetalleLibro(
+                                      libro: b,
+                                      id: id,
+                                      titulo: titulo,
+                                      autor: autor,
+                                      genero: genero,
+                                      anio: anioText,
+                                      portadaUrl: portada,
+                                    );
+                                  },
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 10,
+                                    ),
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        _cover(portada),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                titulo,
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.w900,
+                                                  color: navy,
+                                                  fontSize: 15,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                'Autor: $autor',
+                                                style: const TextStyle(
+                                                  color: Colors.black54,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                'Género: $genero • Año: $anioText',
+                                                style: const TextStyle(
+                                                  color: Colors.black54,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        IconButton(
+                                          tooltip: 'Editar',
+                                          icon: const Icon(
+                                            Icons.edit_outlined,
+                                            color: navy,
+                                          ),
+                                          onPressed: () async {
+                                            await Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) =>
+                                                    EditarLibroScreen(libro: b),
+                                              ),
+                                            );
+                                            _load();
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                      ],
                     ),
                   ),
                 ],
@@ -184,55 +306,55 @@ class _LibrosScreenState extends State<LibrosScreen> {
     );
   }
 
-  /// ✅ Portada: tamaño fijo, placeholder, loading y error
   Widget _cover(String url) {
     final u = url.trim();
 
-    // contenedor fijo para que el leading no “salte”
-    Widget box(Widget child) => SizedBox(width: 44, height: 60, child: child);
+    Widget box(Widget child) => SizedBox(
+          width: 46,
+          height: 64,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: child,
+          ),
+        );
 
     if (u.isEmpty) {
-      return box(Container(
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          color: Colors.black12,
+      return box(
+        Container(
+          alignment: Alignment.center,
+          color: gold.withOpacity(0.18),
+          child: const Icon(Icons.menu_book, color: navy),
         ),
-        child: const Icon(Icons.menu_book),
-      ));
+      );
     }
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: box(
-        Image.network(
-          u,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) {
-            return Container(
-              alignment: Alignment.center,
-              color: Colors.black12,
-              child: const Icon(Icons.broken_image),
-            );
-          },
-          loadingBuilder: (context, child, progress) {
-            if (progress == null) return child;
-            return Container(
-              alignment: Alignment.center,
-              color: Colors.black12,
-              child: const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            );
-          },
-        ),
+    return box(
+      Image.network(
+        u,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            alignment: Alignment.center,
+            color: gold.withOpacity(0.18),
+            child: const Icon(Icons.broken_image_outlined, color: navy),
+          );
+        },
+        loadingBuilder: (context, child, progress) {
+          if (progress == null) return child;
+          return Container(
+            alignment: Alignment.center,
+            color: gold.withOpacity(0.18),
+            child: const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          );
+        },
       ),
     );
   }
 
-  /// ✅ Detalle del libro al tocar la tarjeta
   void _mostrarDetalleLibro({
     required Map<String, dynamic> libro,
     required int? id,
@@ -244,29 +366,31 @@ class _LibrosScreenState extends State<LibrosScreen> {
   }) {
     showDialog(
       context: context,
-      builder: (_) {
+      builder: (dialogContext) {
         return AlertDialog(
           title: Text(
             titulo,
-            style: const TextStyle(fontWeight: FontWeight.w900),
+            style: const TextStyle(fontWeight: FontWeight.w900, color: navy),
           ),
           content: SizedBox(
             width: 520,
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (portadaUrl.trim().isNotEmpty)
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(12),
                     child: Image.network(
                       portadaUrl.trim(),
                       height: 220,
                       width: double.infinity,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
+                      errorBuilder: (context, error, stackTrace) => Container(
                         height: 220,
                         alignment: Alignment.center,
-                        child: const Icon(Icons.broken_image, size: 44),
+                        child:
+                            const Icon(Icons.broken_image_outlined, size: 44),
                       ),
                     ),
                   )
@@ -276,33 +400,36 @@ class _LibrosScreenState extends State<LibrosScreen> {
                     width: double.infinity,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.black12),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE1E6F0)),
                     ),
-                    child: const Icon(Icons.menu_book, size: 48),
+                    child: const Icon(Icons.menu_book_outlined, size: 48),
                   ),
                 const SizedBox(height: 12),
-                Align(alignment: Alignment.centerLeft, child: Text("Autor: $autor")),
-                Align(alignment: Alignment.centerLeft, child: Text("Género: $genero")),
-                Align(alignment: Alignment.centerLeft, child: Text("Año: $anio")),
-                if (id != null) Align(alignment: Alignment.centerLeft, child: Text("ID: $id")),
+                Text('Autor: $autor'),
+                Text('Género: $genero'),
+                Text('Año: $anio'),
+                if (id != null) Text('ID: $id'),
               ],
             ),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("CERRAR"),
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cerrar'),
             ),
             ElevatedButton.icon(
-              icon: const Icon(Icons.edit),
-              label: const Text("EDITAR"),
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.push(
+              icon: const Icon(Icons.edit_outlined),
+              label: const Text('Editar'),
+              onPressed: () async {
+                Navigator.pop(dialogContext);
+                await Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => EditarLibroScreen(libro: libro)),
-                ).then((_) => _load());
+                  MaterialPageRoute(
+                    builder: (_) => EditarLibroScreen(libro: libro),
+                  ),
+                );
+                _load();
               },
             ),
           ],

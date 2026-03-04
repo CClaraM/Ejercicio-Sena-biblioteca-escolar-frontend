@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -53,9 +54,7 @@ class ApiService {
   // HTTP helpers
   // ----------------------------
   static Map<String, String> _headers({bool auth = true}) {
-    final h = <String, String>{
-      'Content-Type': 'application/json',
-    };
+    final h = <String, String>{'Content-Type': 'application/json'};
     if (auth && _token != null) {
       h['Authorization'] = 'Bearer $_token';
     }
@@ -73,7 +72,9 @@ class ApiService {
   static Exception _httpError(http.Response r) {
     try {
       final j = jsonDecode(r.body);
-      final msg = (j is Map && j['message'] != null) ? j['message'].toString() : r.body;
+      final msg = (j is Map && j['message'] != null)
+          ? j['message'].toString()
+          : r.body;
       return Exception('HTTP ${r.statusCode}: $msg');
     } catch (_) {
       return Exception('HTTP ${r.statusCode}: ${r.body}');
@@ -102,18 +103,21 @@ class ApiService {
 
     // soporta varias formas de respuesta
     final token = (j['token'] ?? j['accessToken'] ?? '').toString();
-    final rol = (j['rol'] ??
-            (j['user'] is Map ? j['user']['rol'] : null) ??
-            (j['usuario'] is Map ? j['usuario']['rol'] : null) ??
-            '')
-        .toString();
-    final doc = (j['documento'] ??
-            (j['user'] is Map ? j['user']['documento'] : null) ??
-            (j['usuario'] is Map ? j['usuario']['documento'] : null) ??
-            documento)
-        .toString();
+    final rol =
+        (j['rol'] ??
+                (j['user'] is Map ? j['user']['rol'] : null) ??
+                (j['usuario'] is Map ? j['usuario']['rol'] : null) ??
+                '')
+            .toString();
+    final doc =
+        (j['documento'] ??
+                (j['user'] is Map ? j['user']['documento'] : null) ??
+                (j['usuario'] is Map ? j['usuario']['documento'] : null) ??
+                documento)
+            .toString();
 
-    if (token.isEmpty) throw Exception('Login sin token. Revisa respuesta del backend.');
+    if (token.isEmpty)
+      throw Exception('Login sin token. Revisa respuesta del backend.');
     if (rol.isEmpty) {
       // si tu backend no devuelve rol, igual guardamos
       await _saveSession(token: token, rol: 'estudiante', documento: doc);
@@ -143,10 +147,22 @@ class ApiService {
   // LIBROS
   // ----------------------------
   // GET /api/libros?search=... (si no hay search, lista todo)
-  static Future<List<Map<String, dynamic>>> getLibros({String search = ''}) async {
+  static Future<List<Map<String, dynamic>>> getLibros({
+    String search = '',
+  }) async {
     final qs = search.trim();
-    final url = Uri.parse('$baseUrl/api/libros${qs.isEmpty ? '' : '?search=${Uri.encodeQueryComponent(qs)}'}');
-    final r = await http.get(url, headers: _headers()); // libros pueden ser públicos
+    final url = Uri.parse(
+      '$baseUrl/api/libros${qs.isEmpty ? '' : '?search=${Uri.encodeQueryComponent(qs)}'}',
+    );
+    http.Response r;
+    try {
+      r = await http.get(url, headers: _headers());
+      if (r.statusCode == 401) {
+        r = await http.get(url, headers: _headers(auth: false));
+      }
+    } catch (e) {
+      rethrow;
+    }
     if (r.statusCode < 200 || r.statusCode >= 300) throw _httpError(r);
 
     final j = jsonDecode(r.body);
@@ -186,8 +202,11 @@ class ApiService {
         'titulo': (libro['titulo'] ?? '').toString().trim(),
         'autor': (libro['autor'] ?? '').toString().trim(),
         'area': (libro['genero'] ?? 'General').toString().trim(),
-        'anio_publicacion': int.tryParse((libro['anio'] ?? '').toString().trim()),
-        'cantidad_ejemplares': int.tryParse((libro['ejemplares'] ?? '0').toString().trim()) ?? 0,
+        'anio_publicacion': int.tryParse(
+          (libro['anio'] ?? '').toString().trim(),
+        ),
+        'cantidad_ejemplares':
+            int.tryParse((libro['ejemplares'] ?? '0').toString().trim()) ?? 0,
       }),
     );
 
@@ -206,7 +225,6 @@ class ApiService {
 
     return idLibro;
   }
-
 
   // PUT /api/admin/libros/:id (ajusta si tu ruta es diferente)
   static Future<void> editarLibro(int id, Map<String, dynamic> cambios) async {
@@ -228,32 +246,47 @@ class ApiService {
   }
 
   // Upload portada: POST /api/admin/libros/:id/portada (multipart form-data field=file)
-  static Future<String> uploadPortada(int idLibro, List<int> bytes, String filename) async {
+  static Future<String> uploadPortada(
+    int idLibro,
+    List<int> bytes,
+    String filename,
+  ) async {
     final url = Uri.parse('$baseUrl/api/admin/libros/$idLibro/portada');
     final req = http.MultipartRequest('POST', url);
     req.headers['Authorization'] = 'Bearer $_token';
-    req.files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+    req.files.add(
+      http.MultipartFile.fromBytes('file', bytes, filename: filename),
+    );
     final res = await req.send();
     final body = await res.stream.bytesToString();
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw Exception('HTTP ${res.statusCode}: $body');
     }
     final j = jsonDecode(body);
-    final portadaUrl = _absUrl((j['portada_url'] ?? j['portadaUrl'] ?? '').toString());
+    final portadaUrl = _absUrl(
+      (j['portada_url'] ?? j['portadaUrl'] ?? '').toString(),
+    );
     return portadaUrl;
   }
 
   // Carga masiva de Libros desde Excel (xlsx) - POST /api/admin/import/libros (multipart form-data field=file)
-  static Future<int> importarLibrosExcel(List<int> bytes, String filename) async {
-    final url = Uri.parse('$baseUrl/api/admin/import/libros'); // ✅ AJUSTA si tu ruta es otra
+  static Future<int> importarLibrosExcel(
+    List<int> bytes,
+    String filename,
+  ) async {
+    final url = Uri.parse(
+      '$baseUrl/api/admin/import/libros',
+    ); // ✅ AJUSTA si tu ruta es otra
 
     final req = http.MultipartRequest('POST', url);
     req.headers['Authorization'] = 'Bearer $_token';
-    req.files.add(http.MultipartFile.fromBytes(
-      'file', // ✅ nombre del campo que espera multer
-      bytes,
-      filename: filename,
-    ));
+    req.files.add(
+      http.MultipartFile.fromBytes(
+        'file', // ✅ nombre del campo que espera multer
+        bytes,
+        filename: filename,
+      ),
+    );
     final res = await req.send();
     final body = await res.stream.bytesToString();
     if (res.statusCode < 200 || res.statusCode >= 300) {
@@ -266,17 +299,24 @@ class ApiService {
   }
 
   // Carga masiva de Usuarios desde Excel (xlsx) - POST /api/admin/import/usuarios (multipart form-data field=file)
-  static Future<int> importarUsuariosExcel(List<int> bytes, String filename) async {
-    final url = Uri.parse('$baseUrl/api/admin/import/usuarios'); // ✅ AJUSTA si tu ruta es otra
+  static Future<int> importarUsuariosExcel(
+    List<int> bytes,
+    String filename,
+  ) async {
+    final url = Uri.parse(
+      '$baseUrl/api/admin/import/usuarios',
+    ); // ✅ AJUSTA si tu ruta es otra
 
     final req = http.MultipartRequest('POST', url);
     req.headers['Authorization'] = 'Bearer $_token';
 
-    req.files.add(http.MultipartFile.fromBytes(
-      'file', // ✅ nombre del campo que espera multer
-      bytes,
-      filename: filename,
-    ));
+    req.files.add(
+      http.MultipartFile.fromBytes(
+        'file', // ✅ nombre del campo que espera multer
+        bytes,
+        filename: filename,
+      ),
+    );
 
     final res = await req.send();
     final body = await res.stream.bytesToString();
@@ -297,24 +337,131 @@ class ApiService {
   // GET /api/usuarios?q=...
   static Future<List<Map<String, dynamic>>> getUsuarios({String q = ''}) async {
     final qs = q.trim();
-    final url = Uri.parse('$baseUrl/api/usuarios${qs.isEmpty ? '' : '?q=${Uri.encodeQueryComponent(qs)}'}');
+    final url = Uri.parse(
+      '$baseUrl/api/usuarios${qs.isEmpty ? '' : '?q=${Uri.encodeQueryComponent(qs)}'}',
+    );
     final r = await http.get(url, headers: _headers());
     if (r.statusCode < 200 || r.statusCode >= 300) throw _httpError(r);
 
     final j = jsonDecode(r.body);
     final List list = (j is List) ? j : (j['data'] is List ? j['data'] : []);
-    return list.map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e as Map)).toList();
+    return list
+        .map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
   }
 
   // POST /api/admin/usuarios (ajusta si tu ruta es diferente)
   static Future<void> agregarUsuario(Map<String, dynamic> u) async {
     final url = Uri.parse('$baseUrl/api/admin/usuarios');
+    final r = await http.post(url, headers: _headers(), body: jsonEncode(u));
+    if (r.statusCode < 200 || r.statusCode >= 300) throw _httpError(r);
+  }
+
+  // GET /api/usuarios/me -> perfil del usuario autenticado
+  static Future<Map<String, dynamic>> getMiPerfil() async {
+    final url = Uri.parse('$baseUrl/api/usuarios/me');
+    final r = await http.get(url, headers: _headers());
+    if (r.statusCode < 200 || r.statusCode >= 300) throw _httpError(r);
+    final j = jsonDecode(r.body);
+    return Map<String, dynamic>.from(j as Map);
+  }
+
+  // PUT /api/usuarios/me -> actualizar perfil propio (nombre, apellido, correo, telefono)
+  static Future<void> updateMiPerfil({
+    required String nombre,
+    required String apellido,
+    required String correo,
+    required String telefono,
+  }) async {
+    final url = Uri.parse('$baseUrl/api/usuarios/me');
+    final r = await http.put(
+      url,
+      headers: _headers(),
+      body: jsonEncode({
+        'nombre': nombre,
+        'apellido': apellido,
+        'correo': correo,
+        'telefono': telefono,
+      }),
+    );
+    if (r.statusCode < 200 || r.statusCode >= 300) throw _httpError(r);
+  }
+
+  // ----------------------------
+  // PRESTAMOS (usuario)
+  // ----------------------------
+  // GET /api/me/prestamos -> préstamos del usuario autenticado
+  static Future<List<Map<String, dynamic>>> getMisPrestamos() async {
+    final url = Uri.parse('$baseUrl/api/me/prestamos');
+    final r = await http.get(url, headers: _headers());
+    if (r.statusCode < 200 || r.statusCode >= 300) throw _httpError(r);
+
+    final j = jsonDecode(r.body);
+    final List list = (j is List) ? j : (j['data'] is List ? j['data'] : []);
+
+    return list.map<Map<String, dynamic>>((e) {
+      final m = Map<String, dynamic>.from(e as Map);
+
+      final portadaRaw = (m['portada_url'] ?? m['portadaUrl'] ?? '').toString();
+      final portadaAbs = _absUrl(portadaRaw);
+
+      final fechaPrestamo = (m['fecha_prestamo'] ?? '').toString();
+      final fechaVenc = (m['fecha_vencimiento'] ?? m['fechaVencimiento'] ?? '').toString();
+      final fechaDev = (m['fecha_devolucion'] ?? m['fechaDevolucion'] ?? '').toString();
+
+      return {
+        ...m,
+        'id': m['id'] ?? m['id_prestamo'],
+        'portada_url': portadaAbs,
+        'portadaUrl': portadaAbs,
+
+        'fecha_prestamo': fechaPrestamo,
+        'fecha_vencimiento': fechaVenc,
+        'fecha_devolucion': fechaDev,
+
+        'fechaVencimiento': fechaVenc,
+        'fechaDevolucion': fechaDev,
+      };
+    }).toList();
+  }
+
+  // PUT /api/usuarios/:id -> admin actualiza usuario (nombre, apellido, correo, telefono, rol)
+  static Future<void> adminUpdateUsuario(
+    int id,
+    Map<String, dynamic> cambios,
+  ) async {
+    final url = Uri.parse('$baseUrl/api/usuarios/$id');
+    final r = await http.put(
+      url,
+      headers: _headers(),
+      body: jsonEncode(cambios),
+    );
+    if (r.statusCode < 200 || r.statusCode >= 300) throw _httpError(r);
+  }
+
+  // GET /api/libros/:id -> detalle completo (incluye `ejemplares_disponibles`)
+  static Future<Map<String, dynamic>> getLibroDetalle(int id) async {
+    final url = Uri.parse('$baseUrl/api/libros/$id');
+    final r = await http.get(url, headers: _headers());
+    if (r.statusCode < 200 || r.statusCode >= 300) throw _httpError(r);
+    final j = jsonDecode(r.body);
+    return Map<String, dynamic>.from(j as Map);
+  }
+
+  // POST /api/solicitudes { id_libro }
+  static Future<int> solicitarLibro(int idLibro) async {
+    final url = Uri.parse('$baseUrl/api/solicitudes');
     final r = await http.post(
       url,
       headers: _headers(),
-      body: jsonEncode(u),
+      body: jsonEncode({'id_libro': idLibro}),
     );
     if (r.statusCode < 200 || r.statusCode >= 300) throw _httpError(r);
+    final j = jsonDecode(r.body);
+    return int.tryParse(
+          (j['id_solicitud'] ?? j['insertId'] ?? j['id'] ?? 0).toString(),
+        ) ??
+        0;
   }
 
   // ----------------------------
@@ -328,12 +475,33 @@ class ApiService {
 
     final j = jsonDecode(r.body);
     final List list = (j is List) ? j : (j['data'] is List ? j['data'] : []);
-    return list.map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e as Map)).toList();
+    return list
+        .map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
+  // GET /api/solicitudes/me -> solicitudes del usuario autenticado
+  static Future<List<Map<String, dynamic>>> getMisSolicitudes() async {
+    final url = Uri.parse('$baseUrl/api/solicitudes/me');
+    final r = await http.get(url, headers: _headers());
+    if (r.statusCode < 200 || r.statusCode >= 300) throw _httpError(r);
+
+    final j = jsonDecode(r.body);
+    final List list = (j is List) ? j : (j['data'] is List ? j['data'] : []);
+    return list
+        .map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
   }
 
   // POST /api/bibliotecario/solicitudes/:id/aprobar {dias_prestamo,observacion}
-  static Future<void> aprobarSolicitud(int idSolicitud, {int? diasPrestamo, String? observacion}) async {
-    final url = Uri.parse('$baseUrl/api/bibliotecario/solicitudes/$idSolicitud/aprobar');
+  static Future<void> aprobarSolicitud(
+    int idSolicitud, {
+    int? diasPrestamo,
+    String? observacion,
+  }) async {
+    final url = Uri.parse(
+      '$baseUrl/api/bibliotecario/solicitudes/$idSolicitud/aprobar',
+    );
     final r = await http.post(
       url,
       headers: _headers(),
@@ -346,14 +514,17 @@ class ApiService {
   }
 
   // POST /api/bibliotecario/solicitudes/:id/rechazar {observacion}
-  static Future<void> rechazarSolicitud(int idSolicitud, {String? observacion}) async {
-    final url = Uri.parse('$baseUrl/api/bibliotecario/solicitudes/$idSolicitud/rechazar');
+  static Future<void> rechazarSolicitud(
+    int idSolicitud, {
+    String? observacion,
+  }) async {
+    final url = Uri.parse(
+      '$baseUrl/api/bibliotecario/solicitudes/$idSolicitud/rechazar',
+    );
     final r = await http.post(
       url,
       headers: _headers(),
-      body: jsonEncode({
-        if (observacion != null) 'observacion': observacion,
-      }),
+      body: jsonEncode({if (observacion != null) 'observacion': observacion}),
     );
     if (r.statusCode < 200 || r.statusCode >= 300) throw _httpError(r);
   }
@@ -362,7 +533,10 @@ class ApiService {
   // PRESTAMOS (bibliotecario/admin)
   // ----------------------------
   // GET /api/bibliotecario/prestamos?estado=activo&soloVencidos=1
-  static Future<List<Map<String, dynamic>>> getPrestamos({String estado = 'activo', bool soloVencidos = false}) async {
+  static Future<List<Map<String, dynamic>>> getPrestamos({
+    String estado = 'activo',
+    bool soloVencidos = false,
+  }) async {
     final url = Uri.parse(
       '$baseUrl/api/bibliotecario/prestamos?estado=${Uri.encodeQueryComponent(estado)}&soloVencidos=${soloVencidos ? 1 : 0}',
     );
@@ -371,11 +545,17 @@ class ApiService {
 
     final j = jsonDecode(r.body);
     final List list = (j is List) ? j : (j['data'] is List ? j['data'] : []);
-    return list.map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e as Map)).toList();
+    return list
+        .map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
   }
 
   // POST /api/prestamos/:id/devolver {condicion,observaciones}
-  static Future<void> devolverPrestamo(int idPrestamo, {String condicion = 'bueno', String observaciones = ''}) async {
+  static Future<void> devolverPrestamo(
+    int idPrestamo, {
+    String condicion = 'bueno',
+    String observaciones = '',
+  }) async {
     final url = Uri.parse('$baseUrl/api/prestamos/$idPrestamo/devolver');
     final r = await http.post(
       url,
