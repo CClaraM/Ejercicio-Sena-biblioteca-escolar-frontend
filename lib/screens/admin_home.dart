@@ -23,9 +23,9 @@ class _AdminHomeState extends State<AdminHome> {
 
   // Paleta fija (marca)
   static const Color navy = Color(0xFF0F2A44);
-  static const Color navy2 = Color(0xFF163A5F);
+  //static const Color navy2 = Color(0xFF163A5F);
   static const Color gold = Color(0xFFC8A24A);
-  static const Color bg = Color(0xFFF4F6FA);
+  //static const Color bg = Color(0xFFF4F6FA);
   static const Color cardBorder = Color(0xFFE6EAF2);
 
   @override
